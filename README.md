@@ -7,3 +7,5 @@ Existing defense methods, including generating adversarial trajectories and trai
 To tackle the limitations, we model the privacy-preserving policy training as the problem of finding an optimal dynamical switching among a diverse set of expert policies, aiming to induce the confusion for potential imitation attackers. Thus, we propose a hierarchical Policy Confusion Defense (PCD) framework that incorporates multiple near-optimal expert policies at the low level and employs a switcher policy at the high level. 
 Furthermore, to accommodate various scenarios, two high-level switcher policies are developed: a random-based switcher with low resource requirements, and an adversarial-based switcher optimizing the low-level policy selection with dual objectives on task-capability and defense-effectiveness.
 Extensive experiments are conducted to evaluate our defense framework against three imitation attacks, compared to two state-of-the-art defense methods. The results demonstrate that our framework is effective in (a) degrading the approximated policies by imitation attackers while (b) maintaining good performance in the original RL tasks.
+
+![image](Methodology.png)
