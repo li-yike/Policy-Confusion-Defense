@@ -1,0 +1,380 @@
+#工程: AtariGAIL
+    Env: imitation
+            AtariGAIL
+
+sudo apt-get install openmpi-bin openmpi-doc libopenmpi-dev #依赖
+which mpicc  #测试
+pip install mpi4py #安装mpi4py
+
+
+
+
+# 工程: Imitation_OpenAI
+   Env: AdvPolicy_Atari   (pip install atari-py==0.1.7)
+# 测试mujoco--→Atari,生成专家轨迹
+cd '/usr/local/WorkSpace/Imitation_OpenAI/imitation_runs'
+mkdir Atari
+python ./scripts/im_pipeline.py ./pipelines/im_pipeline.yaml 0_sampletrajs
+
+
+
+=========================================================
+# Base_GAN_Protect_Model-new
+#02.15
+#生成专家策略
+python ./scripts/gen_classic_policies.py ‘Pong-v4’ --outdir ‘./expert_policies/’
+python ./scripts/gen_classic_policies.py ‘Pong-v4’ --outdir ‘classic_policies/Pong-v4’
+
+#02.06
+
+#训练OurMethod
+nohup  python ./scripts/imitate_mj.py --mode ga --env_name Hopper-v2 --data imitation_runs/modern_stochastic/trajs_hopper.h5 --data_attack imitation_runs/attack_trajs/trajs_hopper_fgsm_attack.h5 --limit_trajs 1000 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --distance 0.1 --reward_limit 1000 --log /usr/local/WorkSpace/Base_GAN_Protect_Model-new/result_li/policy/alg=ga,task=hopper,num_trajs=1000,run=0,dis_lam=0.995,distance=0.1.h5 > /usr/local/WorkSpace/Base_GAN_Protect_Model-new/result_li/logfiles/Hopper_iter_500_dist_0.1_r-limit_1000_num-trajs_1000.log 2>&1
+
+##########################################
+trajs, nohup logfiles --> /imitation_runs/
+learned policy --> /results/
+##########################################
+
+nohup  python /root/code/imitation/imitate_mj.py --mode ga --env_name Hopper-v3 --data /root/leak_result/trpo-ppo-ddpg-sac-Hopper-v3_step-interval=90-model-num=4-mixture.h5 --limit_trajs 1000 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log /root/code/imitation/imitation_runs/random-based/Learned_Policy/alg=ga,task=hopper,num_trajs=1000,run=0,dis_lam=0.995,distance=0.1.h5  > /root/code/imitation/imitation_runs/random-based/logfiles/Hopper_iter_500_dist_0.1_r-limit_1000_num-trajs_1000.log 2>&1
+
+##########################################
+--log /root/imitation/results/learned_policy/alg=ga,task=hopper,num_trajs=1000,run=0,dis_lam=0.995,distance=0.1.h5
+
+#查看训练曲线
+root@bjtu-MS-7B23:/usr/local/WorkSpace/Base_GAN_Protect_Model-new# 
+python showlog.py result_li/policy/OurMethod/alg\=ga\,task\=hopper\,num_trajs\=1000\,run\=0\,dis_lam\=0.995\,distance\=0.1.h5
+
+#生成Our轨迹
+python ./scripts/im_pipeline.py ./pipelines/im_pipeline.yaml 0_sampletrajs
+#查看Our轨迹
+python showtrajs.py result_li/trajs/OurMethod/trajs_hopper.h5
+      ret: 3615.2190351124686 +/- 453.4990347186314
+      len: 974.1553398058253 +/- 121.92634711977516
+
+#用Our轨迹重新训练IRL
+#Imitation_OpenAI工程，
+   - Imitation_OpenAI/OurMethod/trajs/，   --Our轨迹复制
+   - Imitation_OpenAI/LearnedOur/，       --GAIL学习Our轨迹所得模型
+(无reward_limit)
+nohup  python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data OurMethod/trajs/trajs_hopper.h5 --limit_trajs 1000 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log LearnedOur/leanedour_alg=ga,task=hopper,num_trajs=1000,run=0.h5 > LearnedOur/logfiles/leanedour_alg=ga,task=hopper,num_trajs=1000,run=0.log 2>&1
+
+#生成重新训练的IRL轨迹
+python ./scripts/im_pipeline.py ./pipelines/im_pipeline.yaml 0_sampletrajs
+      ret: 3617.1310796267358 +/- 405.50062593842193
+      avgr: 3.700040730162812
+      len: 977.5922330097087 +/- 104.01964311256839
+      ent: 0.3362577650370202
+
+#画图
+#欺骗轨迹，IRL学得轨迹
+/usr/local/WorkSpace/Base_GAN_Protect_Model-new# python showtrajs.py result_li/trajs/LearnedOur/trajs_hopper.h5 result_li/trajs/OurMethod/trajs_hopper.h5 
+#专家轨迹，FGSM负样本
+python showtrajs.py  Improve_Imitation_OpenAI/imitation_runs/modern_stochastic/trajs_hopper.h5 Improve_Imitation_OpenAI/imitation_runs/attack_trajs/trajs_hopper_fgsm_attack.h5
+
+
+#Base_GAN_Protect_Model-main
+
+#生成专家轨迹
+cd Improve_Imitation_OpenAI/
+python ./scripts/im_pipeline.py ./pipelines/im_pipeline.yaml 0_sampletrajs
+
+#生成对抗轨迹
+python 
+
+#复制到Improve_Imitation_OpenAI文件夹
+cd ./FGSM_attack/
+cp -r ./imitation_runs/ /usr/local/WorkSpace/Base_GAN_Protect_Model-main/Improve_Imitation_OpenAI/imitation_runs/
+
+#(专家+对抗)训练模型
+nohup python3 ./scripts/imitate_mj.py --mode ga --env_name Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --data_attack imitation_runs/imitation_runs/trajs/trajs_hopper_fgsm_attack.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --distance 0.1 --reward_limit 1000 --log result/checkpoints_all/alg=ga,task=hopper,num_trajs=4,run=0,dis_lam=0.995,distance=0.1.h5 > /usr/local/WorkSpace/Base_GAN_Protect_Model-main/result_li/logfiles/ga_Hopper-v2_iter_500_distance_0.1_reward-limit_1000.log 2>&1
+
+#混合轨迹
+mix-trajs.py --expert_trajs EXPERT_TRAJS --adv_trajs ADV_TRAJS –task Hopper-v2  --ratio  [--trajs_num TRAJS_NUM] [--savepath SAVEPATH] [--run RUN]
+
+
+
+#Base_GAN_Protect_Model-main
+python ./scripts/print_saved_returns.py /usr/local/WorkSpace/Base_GAN_Protect_Model-new/FGSM_attack/imitation_runs/trajs/trajs_hopper_fgsm_attack.h5
+
+nohup python ./scripts/imitate_mj.py --mode ga --env_name Hopper-v2 --data imitation_runs/modern_stochastic/trajs_hopper.h5 --data_attack imitation_runs/attack_trajs/trajs_hopper_fgsm_attack.h5 --limit_trajs 1000 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --distance 0.1 --reward_limit 1000 --log /usr/local/WorkSpace/Base_GAN_Protect_Model-new/result_li/policy/alg=ga,task=hopper,num_trajs=1000,run=0,dis_lam=0.995,distance=0.1.h5 > /usr/local/WorkSpace/Base_GAN_Protect_Model-new/result_li/logfiles/Hopper_iter_500_distance_0.1_reward-limit_1000.log 2>&1  
+
+
+
+
+
+
+fields = [
+    ('iter', self.curr_iter, int),
+    ('trueret', sampbatch.r.padded(fill=0.).sum(axis=1).mean(), float), # average return for this batch of trajectories
+    ('iret', rcurr.padded(fill=0.).sum(axis=1).mean(), float), # average return on imitation reward
+    ('dist',dist.mean(),float),
+    ('score',score_B.mean(),float),
+    ('avglen', int(np.mean([len(traj) for traj in sampbatch])), int), # average traj length
+    ('ntrajs', self.total_num_trajs, int), # total number of trajs sampled over the course of training
+    ('nsa', self.total_num_sa, int), # total number of state-action pairs sampled over the course of training
+    ('ent', self.policy._compute_actiondist_entropy(sampbatch.adist.stacked).mean(), float), # entropy of action distributions
+    ('vf_r2', vfunc_r2, float),
+    ('tdvf_r2', simplev_r2, float),
+    ('dx', util.maxnorm(params0_P - self.policy.get_params()), float), # max parameter difference from last iteration
+] + step_print + vfit_print + rfit_print + [
+    ('avgr', rcurr_stacked.mean(), float), # average regularized reward encountered
+    ('avgunregr', orig_rcurr_stacked.mean(), float), # average unregularized reward
+    ('avgpreg', policyentbonus_B.mean(), float), # average policy regularization
+    ('tsamp', t_sample.dt, float), # time for sampling
+    ('tadv', t_adv.dt + t_vf_fit.dt, float), # time for advantage computation
+    ('tstep', t_step.dt, float), # time for step computation
+    ('ttotal', self.total_time, float), # total time
+]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#(Old) Imitation_OpenAI
+Pycharm工程
+实现算法
+实验环境
+Conda环境
+基础RL
+Imitation_OpenAI
+Behavior Cloning
+GAIL
+Apprenticeship Learning
+Hopper
+HalfCheetah
+Walker2d
+Humanoid
+AdvPolicy
+PPO
+InverseRL-Pytorch
+GAIL
+AIRL等
+可自行创建
+
+PPO, SAC
+Imitation
+HumanCompatibleAI发布，基于stablebaselines3(无法修改)
+Conda环境：imitation
+
+
+# 启动pycharm
+sudo -i
+/usr/local/pycharm/pycharm-2020.1/bin/pycharm.sh
+
+# 工程路径
+/usr/local/WorkSpace/Imitation_OpenAI/
+运行环境：conda虚拟环境AdvPolicy
+启动conda环境：cd /usr/local/anaconda2/envs
+                           source ~/.bashrc
+                           source activate AdvPolicy
+
+
+# Imitation_OpenAI流程
+
+1. 收集专家轨迹（不用重复跑）
+python ./scripts/im_pipeline.py ./pipelines/im_pipeline.yaml 0_sampletrajs
+
+2. 查看专家轨迹reward
+python ./scripts/print_saved_returns.py ./imitation_runs/modern_stochastic/trajs/trajs_hopper.h5
+
+3. 训练
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=hopper,num_trajs=4,run=0.h5
+自动保存命令行日志至文件，可参考nohup指令：nohup [python 命令] > 文件名.log 2>&1
+
+
+4. 查看训练曲线（可视化）
+python ./scripts/showlog.py imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=hopper,num_trajs=4,run=0.h5
+
+5. 测试 
+python ./scripts/im_pipeline.py ./pipelines/im_pipeline_v2.yaml 2_eval
+
+
+
+
+
+# PBS训练指令集合
+
+(/usr/local/anaconda2/envs/AdvPolicy) root@bjtu-MS-7B23:/usr/local/WorkSpace/Imitation_OpenAI# python ./scripts/im_pipeline.py ./pipelines/im_pipeline.yaml 1_train
+MKL runtime not found. Will not attempt to disable multithreaded MKL for parallel rollouts.
+=== Phase 1: training ===
+#!/bin/bash
+
+#PBS -l walltime=72:00:00,nodes=1:ppn=12,mem=10gb
+#PBS -N im_modern
+#PBS -q atlas
+#PBS -o /dev/null
+#PBS -e /dev/null
+
+sleep $[ ( $RANDOM % 120 ) + 1 ]s
+
+read -r -d '' COMMANDS << END
+python scripts/imitate_mj.py --mode bclone --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 4 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=hopper,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 11 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=hopper,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 18 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=hopper,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 25 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=hopper,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 4 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=walker,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 11 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=walker,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 18 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=walker,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 25 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=walker,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 4 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=ant,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 11 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=ant,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 18 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=ant,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 25 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=ant,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 4 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=halfcheetah,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 11 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=halfcheetah,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 18 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=halfcheetah,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode bclone --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 25 --data_subsamp_freq 20 --max_iter 20001 --log imitation_runs/modern_stochastic/checkpoints_all/alg=bclone,task=halfcheetah,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=hopper,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=hopper,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=hopper,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=hopper,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=walker,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=walker,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=walker,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=walker,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=ant,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=ant,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=ant,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=ant,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=halfcheetah,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=halfcheetah,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=halfcheetah,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_include_time 0 --reward_lr .01 --log imitation_runs/modern_stochastic/checkpoints_all/alg=ga,task=halfcheetah,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=hopper,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=hopper,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=hopper,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=hopper,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=walker,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=walker,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=walker,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=walker,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=ant,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=ant,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=ant,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=ant,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=halfcheetah,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=halfcheetah,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=halfcheetah,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type l2ball --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=fem,task=halfcheetah,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=hopper,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=hopper,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=hopper,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Hopper-v2 --data imitation_runs/modern_stochastic/trajs/trajs_hopper.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=hopper,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=walker,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=walker,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=walker,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Walker2d-v2 --data imitation_runs/modern_stochastic/trajs/trajs_walker.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=walker,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=ant,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=ant,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=ant,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env Ant-v2 --data imitation_runs/modern_stochastic/trajs/trajs_ant.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=ant,num_trajs=25,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 4 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=halfcheetah,num_trajs=4,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 11 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=halfcheetah,num_trajs=11,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 18 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=halfcheetah,num_trajs=18,run=0.h5
+python scripts/imitate_mj.py --mode ga --env HalfCheetah-v2 --data imitation_runs/modern_stochastic/trajs/trajs_halfcheetah.h5 --limit_trajs 25 --data_subsamp_freq 20 --favor_zero_expert_reward 0 --min_total_sa 50000 --max_iter 501 --reward_type simplex --reward_include_time 0 --log imitation_runs/modern_stochastic/checkpoints_all/alg=simplex,task=halfcheetah,num_trajs=25,run=0.h5
+END
+cmd=$(echo "$COMMANDS" | awk "NR == $PBS_ARRAYID")
+echo $cmd
+
+read -r -d '' OUTPUTFILES << END
+logs_im_modern_2022-10-11_11:32:44/0001_alg=bclone,task=hopper,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0002_alg=bclone,task=hopper,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0003_alg=bclone,task=hopper,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0004_alg=bclone,task=hopper,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0005_alg=bclone,task=walker,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0006_alg=bclone,task=walker,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0007_alg=bclone,task=walker,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0008_alg=bclone,task=walker,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0009_alg=bclone,task=ant,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0010_alg=bclone,task=ant,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0011_alg=bclone,task=ant,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0012_alg=bclone,task=ant,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0013_alg=bclone,task=halfcheetah,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0014_alg=bclone,task=halfcheetah,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0015_alg=bclone,task=halfcheetah,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0016_alg=bclone,task=halfcheetah,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0017_alg=ga,task=hopper,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0018_alg=ga,task=hopper,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0019_alg=ga,task=hopper,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0020_alg=ga,task=hopper,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0021_alg=ga,task=walker,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0022_alg=ga,task=walker,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0023_alg=ga,task=walker,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0024_alg=ga,task=walker,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0025_alg=ga,task=ant,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0026_alg=ga,task=ant,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0027_alg=ga,task=ant,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0028_alg=ga,task=ant,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0029_alg=ga,task=halfcheetah,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0030_alg=ga,task=halfcheetah,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0031_alg=ga,task=halfcheetah,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0032_alg=ga,task=halfcheetah,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0033_alg=fem,task=hopper,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0034_alg=fem,task=hopper,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0035_alg=fem,task=hopper,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0036_alg=fem,task=hopper,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0037_alg=fem,task=walker,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0038_alg=fem,task=walker,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0039_alg=fem,task=walker,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0040_alg=fem,task=walker,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0041_alg=fem,task=ant,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0042_alg=fem,task=ant,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0043_alg=fem,task=ant,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0044_alg=fem,task=ant,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0045_alg=fem,task=halfcheetah,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0046_alg=fem,task=halfcheetah,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0047_alg=fem,task=halfcheetah,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0048_alg=fem,task=halfcheetah,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0049_alg=simplex,task=hopper,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0050_alg=simplex,task=hopper,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0051_alg=simplex,task=hopper,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0052_alg=simplex,task=hopper,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0053_alg=simplex,task=walker,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0054_alg=simplex,task=walker,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0055_alg=simplex,task=walker,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0056_alg=simplex,task=walker,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0057_alg=simplex,task=ant,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0058_alg=simplex,task=ant,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0059_alg=simplex,task=ant,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0060_alg=simplex,task=ant,num_trajs=25,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0061_alg=simplex,task=halfcheetah,num_trajs=4,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0062_alg=simplex,task=halfcheetah,num_trajs=11,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0063_alg=simplex,task=halfcheetah,num_trajs=18,run=0.txt
+logs_im_modern_2022-10-11_11:32:44/0064_alg=simplex,task=halfcheetah,num_trajs=25,run=0.txt
+END
+outputfile=$PBS_O_WORKDIR/$(echo "$OUTPUTFILES" | awk "NR == $PBS_ARRAYID")
+echo $outputfile
+# Make sure output directory exists
+mkdir -p "`dirname "$outputfile"`" 2>/dev/null
+
+cd $PBS_O_WORKDIR
+
+echo $cmd >$outputfile
+eval $cmd >>$outputfile 2>&1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

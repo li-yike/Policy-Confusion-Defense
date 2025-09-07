@@ -1,0 +1,5 @@
+nohup: ignoring input
+Traceback (most recent call last):
+  File "./scripts/imitate_mj.py", line 7, in <module>
+    from environments import rlgymenv
+ModuleNotFoundError: No module named 'environments'
